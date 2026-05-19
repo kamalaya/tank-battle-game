@@ -143,6 +143,7 @@
 
       // --- Input ---
       const keys = {};
+      let spaceJustPressed = false;
       window.addEventListener('keydown', e => {
         keys[e.code] = true;
         if (e.code === 'KeyP') {
@@ -152,15 +153,11 @@
         if (e.code === 'Space' || e.code.startsWith('Arrow')) {
           e.preventDefault();
         }
+        if (e.code === 'Space') spaceJustPressed = true;
         initAudio();
         if (gameState === 'menu') { startGame(); }
         if (gameState === 'gameOver' && e.code === 'Space') { resetGame(); startGame(); }
         if (gameState === 'levelClear' && e.code === 'Space') { nextLevel(); }
-
-        // Shoot on Space press (event-driven, bypasses frame timing)
-        if (e.code === 'Space' && gameState === 'playing' && player && player.active) {
-          player.shoot();
-        }
       });
       window.addEventListener('keyup', e => { keys[e.code] = false; });
 
@@ -266,6 +263,12 @@
             else if (keys['KeyA'])      this.facingDir = 3;
             else if (keys['KeyD'])      this.facingDir = 1;
             else                        this.facingDir = this.dir;
+
+            // Space press drives shooting, consumed once per frame after state is current
+            if (spaceJustPressed) {
+              spaceJustPressed = false;
+              this.shoot();
+            }
           } else {
             this.aiUpdate();
           }
