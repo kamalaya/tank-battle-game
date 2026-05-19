@@ -75,7 +75,8 @@
     </div>
     <canvas id="gameCanvas" width="780" height="600"></canvas>
     <div class="controls-hint">
-      <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> Move &nbsp;|&nbsp;
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp;|&nbsp;
+      <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> Aim &nbsp;|&nbsp;
       <kbd>Space</kbd> Shoot &nbsp;|&nbsp;
       <kbd>P</kbd> Pause
     </div>
@@ -148,7 +149,7 @@
           if (gameState === 'playing') { gameState = 'paused'; }
           else if (gameState === 'paused') { gameState = 'playing'; }
         }
-        if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+        if (e.code === 'Space' || e.code.startsWith('Arrow')) {
           e.preventDefault();
         }
         initAudio();
@@ -247,12 +248,20 @@
           if (this.flash > 0) this.flash--;
 
           if (this.isPlayer) {
-            let moved = false;
-            if (keys['ArrowUp'] || keys['KeyW']) { this.dir = 0; this.move(0); moved = true; }
-            if (keys['ArrowDown'] || keys['KeyS']) { this.dir = 2; this.move(2); moved = true; }
-            if (keys['ArrowLeft'] || keys['KeyA']) { this.dir = 3; this.move(3); moved = true; }
-            if (keys['ArrowRight'] || keys['KeyD']) { this.dir = 1; this.move(1); moved = true; }
-            if (keys['Space']) this.shoot();
+            // Movement: WASD keys
+            if (keys['KeyW']) { this.dir = 0; this.move(0); }
+            else if (keys['KeyS']) { this.dir = 2; this.move(2); }
+            else if (keys['KeyA']) { this.dir = 3; this.move(3); }
+            else if (keys['KeyD']) { this.dir = 1; this.move(1); }
+
+            // Shooting: arrow keys set direction override, otherwise shoot in facing direction
+            let shootDir = this.dir;
+            if (keys['ArrowUp'])      shootDir = 0;
+            else if (keys['ArrowDown'])  shootDir = 2;
+            else if (keys['ArrowLeft'])  shootDir = 3;
+            else if (keys['ArrowRight']) shootDir = 1;
+
+            if (keys['Space']) this.shoot(shootDir);
           } else {
             this.aiUpdate();
           }
@@ -341,12 +350,13 @@
           return null;
         }
 
-        shoot() {
+        shoot(dirOverride) {
           if (this.shootCooldown > 0) return;
           this.shootCooldown = this.shootDelay;
-          const bx = [0, this.half + 4, 0, -this.half - 4][this.dir];
-          const by = [-this.half - 4, 0, this.half + 4, 0][this.dir];
-          bullets.push(new Bullet(this.x + bx, this.y + by, this.dir, this.isPlayer));
+          const dir = dirOverride !== undefined ? dirOverride : this.dir;
+          const bx = [0, this.half + 4, 0, -this.half - 4][dir];
+          const by = [-this.half - 4, 0, this.half + 4, 0][dir];
+          bullets.push(new Bullet(this.x + bx, this.y + by, dir, this.isPlayer));
           if (this.isPlayer) sfxShoot();
         }
 
