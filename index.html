@@ -167,7 +167,7 @@
           this.color = color;
           this.isPlayer = isPlayer;
           this.speed = isPlayer ? 2.5 : 1.2;
-          this.size = TILE - 6;
+          this.size = TILE - 10;
           this.half = this.size / 2;
           this.shootCooldown = 0;
           this.shootDelay = isPlayer ? 20 : 60;
@@ -226,21 +226,17 @@
         move(dir) {
           const dx = [0, this.speed, 0, -this.speed][dir];
           const dy = [-this.speed, 0, this.speed, 0][dir];
+
+          // Move and resolve per-axis for smooth wall sliding
           this.x += dx;
-          this.y += dy;
-          // clamp to canvas
           this.x = Math.max(this.half, Math.min(W - this.half, this.x));
-          this.y = Math.max(this.half, Math.min(H - this.half, this.y));
-          // wall collision
-          const wall = this.collidesWithWall();
-          if (wall) {
+          if (this.collidesWithWall() || this.collidesWithAnyTank()) {
             this.x -= dx;
-            this.y -= dy;
           }
-          // tank collision
-          const other = this.collidesWithAnyTank();
-          if (other) {
-            this.x -= dx;
+
+          this.y += dy;
+          this.y = Math.max(this.half, Math.min(H - this.half, this.y));
+          if (this.collidesWithWall() || this.collidesWithAnyTank()) {
             this.y -= dy;
           }
         }
@@ -713,13 +709,34 @@
         ];
 
         const idx = (lvl - 1) % maps.length;
-        return maps[idx];
+        const map = maps[idx];
+        // Normalize: ensure every row has exactly COLS characters
+        return map.map(row => {
+          if (row.length < COLS) return row + row[0].repeat(COLS - row.length);
+          return row.slice(0, COLS);
+        });
       }
 
       // --- Spawning ---
+      function findClearSpawn(row, preferCenter = false) {
+        const candidates = [];
+        const map = getLevelMap(level);
+        for (let col = 1; col < COLS - 1; col++) {
+          if (map[row] && map[row][col] === '.') {
+            candidates.push({ x: col * TILE + TILE / 2, y: row * TILE + TILE / 2 });
+          }
+        }
+        if (candidates.length === 0) {
+          return { x: W / 2, y: row * TILE + TILE / 2 };
+        }
+        if (preferCenter) {
+          return candidates[Math.floor(candidates.length / 2)];
+        }
+        return candidates[Math.floor(Math.random() * candidates.length)];
+      }
+
       function spawnPlayer() {
-        const spawnPoints = [{ x: TILE * 2, y: H - TILE * 2 }, { x: W - TILE * 2, y: H - TILE * 2 }];
-        const pt = spawnPoints[level % 2];
+        const pt = findClearSpawn(ROWS - 2, true);
         player = new Tank(pt.x, pt.y, 0, '#4ecca3', true);
       }
 
@@ -732,18 +749,13 @@
           { color: '#e74c3c', hp: 2 },
         ];
         const type = enemyTypes[Math.min(level - 1, enemyTypes.length - 1)];
-        const spawnPoints = [
-          { x: TILE * 2, y: TILE * 2 },
-          { x: W - TILE * 2, y: TILE * 2 },
-          { x: W / 2, y: TILE },
-        ];
-        const pt = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+        const pt = findClearSpawn(1); // top row area
 
         // Don't spawn on top of player
         if (player && player.active) {
           const dx = pt.x - player.x;
           const dy = pt.y - player.y;
-          if (Math.abs(dx) < TILE * 2 && Math.abs(dy) < TILE * 2) return;
+          if (Math.abs(dx) < TILE * 3 && Math.abs(dy) < TILE * 3) return;
         }
 
         const enemy = new Tank(pt.x, pt.y, 2, type.color, false);
