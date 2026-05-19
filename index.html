@@ -75,8 +75,8 @@
     </div>
     <canvas id="gameCanvas" width="780" height="600"></canvas>
     <div class="controls-hint">
-      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp;|&nbsp;
-      <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> Aim &nbsp;|&nbsp;
+      <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> Move &nbsp;|&nbsp;
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Aim &nbsp;|&nbsp;
       <kbd>Space</kbd> Shoot &nbsp;|&nbsp;
       <kbd>P</kbd> Pause
     </div>
@@ -164,7 +164,8 @@
         constructor(x, y, dir, color, isPlayer = false) {
           this.x = x;
           this.y = y;
-          this.dir = dir; // 0=up, 1=right, 2=down, 3=left
+          this.dir = dir; // movement direction: 0=up, 1=right, 2=down, 3=left
+          this.facingDir = dir; // barrel/turret facing direction
           this.color = color;
           this.isPlayer = isPlayer;
           this.speed = isPlayer ? 2.5 : 1.2;
@@ -248,20 +249,20 @@
           if (this.flash > 0) this.flash--;
 
           if (this.isPlayer) {
-            // Movement: WASD keys
-            if (keys['KeyW']) { this.dir = 0; this.move(0); }
-            else if (keys['KeyS']) { this.dir = 2; this.move(2); }
-            else if (keys['KeyA']) { this.dir = 3; this.move(3); }
-            else if (keys['KeyD']) { this.dir = 1; this.move(1); }
+            // Movement: arrow keys
+            if (keys['ArrowUp'])      { this.dir = 0; this.move(0); }
+            else if (keys['ArrowDown'])  { this.dir = 2; this.move(2); }
+            else if (keys['ArrowLeft'])  { this.dir = 3; this.move(3); }
+            else if (keys['ArrowRight']) { this.dir = 1; this.move(1); }
 
-            // Shooting: arrow keys set direction override, otherwise shoot in facing direction
-            let shootDir = this.dir;
-            if (keys['ArrowUp'])      shootDir = 0;
-            else if (keys['ArrowDown'])  shootDir = 2;
-            else if (keys['ArrowLeft'])  shootDir = 3;
-            else if (keys['ArrowRight']) shootDir = 1;
+            // Facing: WASD overrides, otherwise face movement direction
+            if (keys['KeyW'])           this.facingDir = 0;
+            else if (keys['KeyS'])      this.facingDir = 2;
+            else if (keys['KeyA'])      this.facingDir = 3;
+            else if (keys['KeyD'])      this.facingDir = 1;
+            else                        this.facingDir = this.dir;
 
-            if (keys['Space']) this.shoot(shootDir);
+            if (keys['Space']) this.shoot();
           } else {
             this.aiUpdate();
           }
@@ -277,6 +278,7 @@
           if (canSeePlayer) {
             // Face and shoot player
             this.dir = canSeePlayer;
+            this.facingDir = this.dir;
             this.shoot();
             // Chase occasionally
             if (Math.random() < 0.3) this.move(this.dir);
@@ -287,6 +289,7 @@
               if (Math.random() < 0.3) {
                 // random turn
                 this.dir = Math.floor(Math.random() * 4);
+                this.facingDir = this.dir;
               }
               if (Math.random() < 0.5) {
                 this.aiAction = 'move';
@@ -350,10 +353,10 @@
           return null;
         }
 
-        shoot(dirOverride) {
+        shoot() {
           if (this.shootCooldown > 0) return;
           this.shootCooldown = this.shootDelay;
-          const dir = dirOverride !== undefined ? dirOverride : this.dir;
+          const dir = this.facingDir;
           const bx = [0, this.half + 4, 0, -this.half - 4][dir];
           const by = [-this.half - 4, 0, this.half + 4, 0][dir];
           bullets.push(new Bullet(this.x + bx, this.y + by, dir, this.isPlayer));
@@ -364,7 +367,7 @@
           if (!this.active) return;
           ctx.save();
           ctx.translate(this.x, this.y);
-          const angle = [0, Math.PI / 2, Math.PI, -Math.PI / 2][this.dir];
+          const angle = [0, Math.PI / 2, Math.PI, -Math.PI / 2][this.facingDir];
           ctx.rotate(angle);
 
           const flashOn = this.flash > 0 && this.flash % 4 < 2;
