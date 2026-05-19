@@ -49,6 +49,7 @@
       background: #0a0a0a;
       border-radius: 4px;
       box-shadow: 0 0 30px rgba(15, 52, 96, 0.5);
+      cursor: crosshair;
     }
 
     .controls-hint {
@@ -75,9 +76,9 @@
     </div>
     <canvas id="gameCanvas" width="780" height="600"></canvas>
     <div class="controls-hint">
-      <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> Move &nbsp;|&nbsp;
-      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Aim &nbsp;|&nbsp;
-      <kbd>Space</kbd> Shoot &nbsp;|&nbsp;
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp;|&nbsp;
+      &#128196; Mouse Aim &nbsp;|&nbsp;
+      &#128196; Click Shoot &nbsp;|&nbsp;
       <kbd>P</kbd> Pause
     </div>
   </div>
@@ -143,21 +144,42 @@
 
       // --- Input ---
       const keys = {};
-      let spaceJustPressed = false;
+      let mouseX = W / 2;
+      let mouseY = H / 2;
+      let mouseJustPressed = false;
+
+      canvas.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = W / rect.width;
+        const scaleY = H / rect.height;
+        mouseX = (e.clientX - rect.left) * scaleX;
+        mouseY = (e.clientY - rect.top) * scaleY;
+      });
+      canvas.addEventListener('mousedown', e => {
+        if (e.button === 0) mouseJustPressed = true;
+        e.preventDefault();
+      });
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+
       window.addEventListener('keydown', e => {
         keys[e.code] = true;
         if (e.code === 'KeyP') {
           if (gameState === 'playing') { gameState = 'paused'; }
           else if (gameState === 'paused') { gameState = 'playing'; }
         }
-        if (e.code === 'Space' || e.code.startsWith('Arrow')) {
-          e.preventDefault();
-        }
-        if (e.code === 'Space') spaceJustPressed = true;
         initAudio();
         if (gameState === 'menu') { startGame(); }
-        if (gameState === 'gameOver' && e.code === 'Space') { resetGame(); startGame(); }
-        if (gameState === 'levelClear' && e.code === 'Space') { nextLevel(); }
+        if ((gameState === 'gameOver' || gameState === 'levelClear') && e.code === 'Space') {
+          if (gameState === 'gameOver') { resetGame(); startGame(); }
+          else { nextLevel(); }
+        }
+      });
+      // Mouse click also starts / restarts
+      canvas.addEventListener('click', e => {
+        initAudio();
+        if (gameState === 'menu') { mouseJustPressed = false; startGame(); }
+        else if (gameState === 'gameOver') { mouseJustPressed = false; resetGame(); startGame(); }
+        else if (gameState === 'levelClear') { mouseJustPressed = false; nextLevel(); }
       });
       window.addEventListener('keyup', e => { keys[e.code] = false; });
 
@@ -251,22 +273,25 @@
           if (this.flash > 0) this.flash--;
 
           if (this.isPlayer) {
-            // Movement: arrow keys
-            if (keys['ArrowUp'])      { this.dir = 0; this.move(0); }
-            else if (keys['ArrowDown'])  { this.dir = 2; this.move(2); }
-            else if (keys['ArrowLeft'])  { this.dir = 3; this.move(3); }
-            else if (keys['ArrowRight']) { this.dir = 1; this.move(1); }
+            // Movement: WASD keys
+            if (keys['KeyW'])      { this.dir = 0; this.move(0); }
+            else if (keys['KeyS']) { this.dir = 2; this.move(2); }
+            else if (keys['KeyA']) { this.dir = 3; this.move(3); }
+            else if (keys['KeyD']) { this.dir = 1; this.move(1); }
+            // facing follows movement when not shooting, but mouse overrides below
 
-            // Facing: WASD overrides, otherwise face movement direction
-            if (keys['KeyW'])           this.facingDir = 0;
-            else if (keys['KeyS'])      this.facingDir = 2;
-            else if (keys['KeyA'])      this.facingDir = 3;
-            else if (keys['KeyD'])      this.facingDir = 1;
-            else                        this.facingDir = this.dir;
+            // Facing: aim towards mouse cursor (closest cardinal direction)
+            const dx = mouseX - this.x;
+            const dy = mouseY - this.y;
+            if (Math.abs(dx) > Math.abs(dy)) {
+              this.facingDir = dx > 0 ? 1 : 3;
+            } else {
+              this.facingDir = dy > 0 ? 2 : 0;
+            }
 
-            // Space press drives shooting, consumed once per frame after state is current
-            if (spaceJustPressed) {
-              spaceJustPressed = false;
+            // Shoot on left click
+            if (mouseJustPressed) {
+              mouseJustPressed = false;
               this.shoot();
             }
           } else {
@@ -900,7 +925,7 @@
           ctx.fillStyle = '#e0e0e0';
           ctx.font = '16px "Courier New", monospace';
           const blink = Math.sin(frameCount * 0.06) > 0;
-          if (blink) ctx.fillText('Press any key to start', W / 2, H / 2 + 60);
+          if (blink) ctx.fillText('Press any key or click to start', W / 2, H / 2 + 60);
         } else if (gameState === 'paused') {
           ctx.fillStyle = 'rgba(0,0,0,0.6)';
           ctx.fillRect(0, 0, W, H);
@@ -924,7 +949,7 @@
           ctx.fillStyle = '#e0e0e0';
           ctx.font = '16px "Courier New", monospace';
           const blink = Math.sin(frameCount * 0.06) > 0;
-          if (blink) ctx.fillText('Press Space for next stage', W / 2, H / 2 + 60);
+          if (blink) ctx.fillText('Press Space or click for next stage', W / 2, H / 2 + 60);
         } else if (gameState === 'gameOver') {
           ctx.fillStyle = 'rgba(0,0,0,0.7)';
           ctx.fillRect(0, 0, W, H);
@@ -938,7 +963,7 @@
           ctx.fillStyle = '#e0e0e0';
           ctx.font = '16px "Courier New", monospace';
           const blink = Math.sin(frameCount * 0.06) > 0;
-          if (blink) ctx.fillText('Press Space to restart', W / 2, H / 2 + 60);
+          if (blink) ctx.fillText('Press Space or click to restart', W / 2, H / 2 + 60);
         }
       }
 
@@ -1043,6 +1068,27 @@
 
         // Player
         if (player && player.active) player.draw();
+
+        // Aim crosshair at mouse position
+        if (gameState === 'playing' && player && player.active) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(mouseX, mouseY, 6, 0, Math.PI * 2);
+          ctx.moveTo(mouseX - 10, mouseY);
+          ctx.lineTo(mouseX + 10, mouseY);
+          ctx.moveTo(mouseX, mouseY - 10);
+          ctx.lineTo(mouseX, mouseY + 10);
+          ctx.stroke();
+          // Faint line from tank to cursor
+          ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+          ctx.setLineDash([4, 8]);
+          ctx.beginPath();
+          ctx.moveTo(player.x, player.y);
+          ctx.lineTo(mouseX, mouseY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
 
         ctx.restore();
 
