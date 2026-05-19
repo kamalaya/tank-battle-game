@@ -354,7 +354,7 @@
           if (!this.active) return;
           ctx.save();
           ctx.translate(this.x, this.y);
-          const angle = [-Math.PI / 2, 0, Math.PI / 2, Math.PI][this.dir];
+          const angle = [0, Math.PI / 2, Math.PI, -Math.PI / 2][this.dir];
           ctx.rotate(angle);
 
           const flashOn = this.flash > 0 && this.flash % 4 < 2;
