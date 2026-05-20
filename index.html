@@ -640,12 +640,117 @@
         }
       }
 
-      // --- Level Maps ---
+      // --- Level Maps (procedurally generated) ---
+      let currentMap = null;
+
+      function generateRandomMap(lvl) {
+        // Create empty grid, fill border with steel
+        const grid = [];
+        for (let r = 0; r < ROWS; r++) {
+          const row = [];
+          for (let c = 0; c < COLS; c++) {
+            row.push((r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1) ? 'W' : '.');
+          }
+          grid.push(row);
+        }
+
+        // Helper: check if a rect area is all '.'
+        function rectClear(g, r, c, h, w) {
+          for (let rr = r; rr < r + h && rr < ROWS - 1; rr++) {
+            for (let cc = c; cc < c + w && cc < COLS - 1; cc++) {
+              if (rr < 1 || cc < 1 || g[rr][cc] !== '.') return false;
+            }
+          }
+          return true;
+        }
+
+        // Helper: stamp a rect
+        function stamp(g, r, c, h, w, ch) {
+          const cells = [];
+          for (let rr = r; rr < r + h && rr < ROWS - 1; rr++) {
+            for (let cc = c; cc < c + w && cc < COLS - 1; cc++) {
+              if (rr >= 1 && cc >= 1) {
+                g[rr][cc] = ch;
+                cells.push({ r: rr, c: cc });
+              }
+            }
+          }
+          return cells;
+        }
+
+        // Difficulty scales with level
+        const rng = (function (seed) {
+          let s = seed;
+          return function () { s = (s * 1664525 + 1013904223) | 0; return (s >>> 0) / 4294967296; };
+        })(lvl * 137 + Date.now() % 9973);
+
+        const numSteelBlobs = Math.min(6, 1 + Math.floor(lvl * 0.8));
+        const numBrickClusters = Math.min(16, 3 + lvl * 2);
+
+        // Place steel pillars (1x1 or 2x1 or 1x2, isolated)
+        for (let i = 0; i < numSteelBlobs * 3; i++) {
+          const r = 2 + Math.floor(rng() * (ROWS - 8));
+          const c = 2 + Math.floor(rng() * (COLS - 8));
+          const shapes = [[1, 1], [2, 1], [1, 2], [1, 1], [1, 1], [2, 2]];
+          const sh = shapes[Math.floor(rng() * shapes.length)];
+          const h = sh[0], w = sh[1];
+          // require 1-cell gap around steel
+          const cr = r - 1, cc = c - 1, chg = h + 2, cw = w + 2;
+          if (cr >= 1 && cc >= 1 && cr + chg < ROWS - 1 && cc + cw < COLS - 1) {
+            if (rectClear(grid, cr, cc, chg, cw)) {
+              stamp(grid, r, c, h, w, 'W');
+              if (--numSteelBlobs <= 0) break;
+            }
+          }
+        }
+
+        // Place brick clusters (2x2, 3x2, 2x3, or 3x3)
+        for (let i = 0; i < numBrickClusters * 4; i++) {
+          const r = 2 + Math.floor(rng() * (ROWS - 6));
+          const c = 2 + Math.floor(rng() * (COLS - 6));
+          const shapes = [[2, 2], [2, 3], [3, 2], [2, 2], [3, 3], [2, 2], [2, 4], [4, 2]];
+          const sh = shapes[Math.floor(rng() * shapes.length)];
+          const h = sh[0], w = sh[1];
+          if (r + h < ROWS - 1 && c + w < COLS - 1) {
+            if (rectClear(grid, r, c, h, w)) {
+              stamp(grid, r, c, h, w, 'B');
+              if (--numBrickClusters <= 0) break;
+            }
+          }
+        }
+
+        // Force-clear spawn corridors so tanks always have room
+        function clearSpawnCorridor(g, row) {
+          const mid = Math.floor(COLS / 2);
+          const clearRows = row === 1
+            ? [row, row + 1]           // top spawn: clear rows 1-2 only
+            : [row - 1, row];          // bottom spawn: clear rows (ROWS-3)-(ROWS-2)
+          for (let dc = -5; dc <= 5; dc++) {
+            const cc = mid + dc;
+            if (cc >= 1 && cc < COLS - 1) {
+              for (const rr of clearRows) {
+                g[rr][cc] = '.';
+              }
+            }
+          }
+        }
+        clearSpawnCorridor(grid, 1);
+        clearSpawnCorridor(grid, ROWS - 2);
+
+        // Convert to string rows
+        return grid.map(row => row.join(''));
+      }
+
+      function getLevelMap(lvl) {
+        if (!currentMap) currentMap = generateRandomMap(lvl);
+        return currentMap;
+      }
+
       function generateLevel(lvl) {
         walls = [];
+        currentMap = null; // force new random map for this level
         const map = getLevelMap(lvl);
 
-        // Add border walls
         for (let i = 0; i < COLS; i++) {
           for (let j = 0; j < ROWS; j++) {
             if (map[j] && map[j][i]) {
@@ -676,93 +781,6 @@
             };
           }
         };
-      }
-
-      function getLevelMap(lvl) {
-        // Predefined maps, cycling with variations
-        const maps = [
-          // Level 1 - Open Field (brick clusters + center steel block)
-          [
-            'WWWWWWWWWWWWWWWWWWWWWWWWWW',
-            'W........................W',
-            'W..BBBB..........BBBB...W',
-            'W..BBBB..........BBBB...W',
-            'W........................W',
-            'W....BBBB......BBBB.....W',
-            'W....BBBB......BBBB.....W',
-            'W........................W',
-            'W..........WW...........W',
-            'W..........WW...........W',
-            'W..........WW...........W',
-            'W........................W',
-            'W........................W',
-            'W....BBBB......BBBB.....W',
-            'W....BBBB......BBBB.....W',
-            'W........................W',
-            'W..BBBB..........BBBB...W',
-            'W..BBBB..........BBBB...W',
-            'W........................W',
-            'WWWWWWWWWWWWWWWWWWWWWWWWWW',
-          ],
-          // Level 2 - Crossfire (steel pillars + brick clusters)
-          [
-            'WWWWWWWWWWWWWWWWWWWWWWWWWW',
-            'W........................W',
-            'W..BBBB..W....W..BBBB...W',
-            'W..BBBB..W....W..BBBB...W',
-            'W........W....W.........W',
-            'W........W....W.........W',
-            'W..BB.........BB........W',
-            'W..BB.........BB........W',
-            'W........................W',
-            'W....W....BBBB....W.....W',
-            'W....W....BBBB....W.....W',
-            'W....W............W.....W',
-            'W....W............W.....W',
-            'W....W....BBBB....W.....W',
-            'W....W....BBBB....W.....W',
-            'W........................W',
-            'W........BB....BB.......W',
-            'W........BB....BB.......W',
-            'W........................W',
-            'WWWWWWWWWWWWWWWWWWWWWWWWWW',
-          ],
-          // Level 3 - Fortress (brick fortress + scattered steel)
-          [
-            'WWWWWWWWWWWWWWWWWWWWWWWWWW',
-            'W........................W',
-            'W..BB..........BB.......W',
-            'W..BB....WW....BB.......W',
-            'W.......BBBB.............W',
-            'W.......BBBB.............W',
-            'W..........W...B.........W',
-            'W..W.......W...B.........W',
-            'W..W...BBBBBBB...........W',
-            'W..W...BBBBBBB.....W.....W',
-            'W......BBBBBBB.....W.....W',
-            'W.................W.....W',
-            'W......BBBBBBB.....W.....W',
-            'W......BBBBBBB...........W',
-            'W......BBBBBBB...........W',
-            'W..W..............W......W',
-            'W..W..............W......W',
-            'W..........BB...........W',
-            'W..........BB...........W',
-            'WWWWWWWWWWWWWWWWWWWWWWWWWW',
-          ],
-        ];
-
-        const idx = (lvl - 1) % maps.length;
-        const map = maps[idx];
-        // Normalize: ensure every row has exactly COLS characters
-        return map.map(row => {
-          if (row.length === COLS) return row;
-          if (row.length < COLS) {
-            // pad interior with '.' before the right border W
-            return row.slice(0, -1) + '.'.repeat(COLS - row.length) + row.slice(-1);
-          }
-          return row.slice(0, COLS);
-        });
       }
 
       // --- Spawning ---
